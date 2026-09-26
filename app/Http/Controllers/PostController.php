@@ -3,56 +3,55 @@
 namespace App\Http\Controllers;
 
 use App\Models\Post;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\View\View;
+
 
 class PostController extends Controller
-{   
-    public function deletePost(Post $post) {
-        if (auth()->user()->id === $post->user_id) {
-            $post->delete();
-            }
-        return redirect('/');
-    }
+{
+    public function create(Request $request): RedirectResponse
+    {
+        $this->authorize('create', Post::class);
 
-
-    public function updatePost(Post $post, Request $request) {
-        if (auth()->user()->id !== $post->user_id) {
-             return redirect('/');   
-            }
-
-        $incomingFields = $request->validate([
-            'title' => 'required',
-            'body' => 'required'
+        $validated = $request->validate([
+            'title' => ['required', 'string', 'max:120'],
+            'body' => ['required', 'string', 'max:5000'],
         ]);
 
-        $incomingFields['title'] = strip_tags($incomingFields['title']);
-        $incomingFields['body'] = strip_tags($incomingFields['body']);
 
-        $post->update($incomingFields);
-        return redirect('/');
-        
+        $request->user()->posts()->create($validated);
+
+        return redirect('/')->with('status', 'Bericht geplaatst.');
     }
 
-    public function showEditScreen(Post $post) {
-            if (auth()->user()->id !== $post->user_id) {
-                return redirect('/');   
-            }
+    public function edit(Request $request, Post $post): View
+    {
+        $this->authorize('update', $post);
 
-         return view('edit-post', ['post' => $post]);
+        return view('edit-post', ['post' => $post]);
     }
 
-    public function createPost(Request $request) {
-        $incomingFields = $request->validate([
-            'title' => 'required',
-            'body' => 'required'
+    public function update(Request $request, Post $post): RedirectResponse
+    {
+        $this->authorize('update', $post);
+
+        $validated = $request->validate([
+            'title' => ['required', 'string', 'max:120'],
+            'body' => ['required', 'string', 'max:5000'],
         ]);
 
-        $incomingFields['title'] = strip_tags($incomingFields['title']);
-        $incomingFields['body'] = strip_tags($incomingFields['body']);
-        $incomingFields['user_id'] = auth()->id();
+        $post->update($validated);
 
-        Post::create($incomingFields);
-        return redirect('/');
+        return redirect('/')->with('status', 'Bericht bijgewerkt.');
+    }
 
+    public function destroy(Request $request, Post $post): RedirectResponse
+    {
+        $this->authorize('delete', $post);
+
+        $post->delete();
+
+        return redirect('/')->with('status', 'Bericht verwijderd.');
     }
 }

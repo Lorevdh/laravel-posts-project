@@ -3,45 +3,54 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 
 class UserController extends Controller
 {
-    public function login(Request $request) {
-        $incomingFields = $request->validate([
-            'loginname' => 'required',      // dit is nu email
-            'loginpassword' => 'required'
+    public function login(Request $request): RedirectResponse
+    {
+        $credentials = $request->validate([
+            'email' => ['required', 'email'],
+            'password' => ['required'],
         ]);
 
-        if (auth()->attempt([
-            'email' => $incomingFields['loginname'],   // BELANGRIJK: email i.p.v. name
-            'password' => $incomingFields['loginpassword']
-        ])) {
-            $request->session()->regenerate();
+        if (! auth()->attempt($credentials, $request->boolean('remember'))) {
+            return back()
+                ->withInput(['email' => $credentials['email']])
+                ->withErrors(['email' => 'Onjuist e-mailadres of wachtwoord.']);
         }
 
-        return redirect('/');
+        // Nieuwe sessie-ID, zodat een vastgezet session id niet hergebruikt kan
+        // worden. Laravel noemt dit verplicht na inloggen.
+        $request->session()->regenerate();
+
+        return redirect()->intended('/');
     }
 
-    public function logout() {
-        auth()->guard()->logout();
-        return redirect('/');
+    public function logout(Request $request): RedirectResponse
+    {
+        auth()->logout();
+
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+
+        return redirect('/')->with('status', 'Uitgelogd.');
     }
 
-    public function register(Request $request) {
-        $incomingFields = $request->validate([
-            'name' => ['required', 'min:3', 'max:10', Rule::unique('users', 'name')],
-            'email' => ['required', 'email', Rule::unique('users', 'email')],
-            'password' => ['required', 'min:8', 'max:200']
+    public function register(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'min:2', 'max:60'],
+            'email' => ['required', 'email', 'max:255', 'unique:users,email'],
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
         ]);
 
-        $incomingFields['password'] = bcrypt($incomingFields['password']);
+        $user = User::create($validated);
 
-        $user = User::create($incomingFields);
+        auth()->login($user);
+        $request->session()->regenerate();
 
-        auth()->guard()->login($user);
-
-        return redirect('/');
+        return redirect('/')->with('status', 'Account aangemaakt. Welkom.');
     }
 }
